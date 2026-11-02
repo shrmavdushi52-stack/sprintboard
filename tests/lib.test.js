@@ -1,0 +1,18 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {createHistory} from '../src/lib/history.js';import {parseFilters,serializeFilters,matches} from '../src/lib/filters.js';
+import {wouldCycle,cascade,criticalPath,toICS} from '../src/lib/schedule.js';import {validate,load,persist} from '../src/lib/storage.js';import {md} from '../src/lib/util.js';
+const C=(id,s,d,deps=[])=>({id,title:id,start:s,due:d,deps,labels:[],col:'a'});
+test('history undo/redo',()=>{const h=createHistory(2);h.push('a');h.push('b');h.push('c');assert.equal(h.undo('d'),'c');assert.equal(h.redo('c'),'d');h.push('x');assert.equal(h.canRedo(),false)});
+test('filters round-trip + match',()=>{const F=parseFilters('?assignee=Ben&label=bug');assert.equal(serializeFilters(F),'assignee=Ben&label=bug');
+ assert.ok(matches(F,{assignee:'Ben',labels:['bug'],title:'x'}));assert.ok(!matches(F,{assignee:'Ann',labels:['bug'],title:'x'}))});
+test('cycle detection',()=>{const cs=[C('a','2026-01-01','2026-01-02'),C('b','2026-01-03','2026-01-04',['a']),C('c','2026-01-05','2026-01-06',['b'])];
+ assert.ok(wouldCycle(cs,'a','c'));assert.ok(wouldCycle(cs,'a','a'));assert.ok(!wouldCycle(cs,'c','a'))});
+test('cascade keeps duration and shifts chain',()=>{const cs=[C('a','2026-01-01','2026-01-05'),C('b','2026-01-02','2026-01-03',['a']),C('c','2026-01-04','2026-01-04',['b'])];
+ assert.deepEqual(cascade(cs,'a'),['b','c']);assert.equal(cs[1].start,'2026-01-06');assert.equal(cs[1].due,'2026-01-07');assert.equal(cs[2].start,'2026-01-08')});
+test('critical path',()=>{const cs=[C('a','2026-01-01','2026-01-02'),C('b','2026-01-03','2026-01-09',['a']),C('x','2026-01-01','2026-01-01')];assert.deepEqual([...criticalPath(cs)].sort(),['a','b'])});
+test('ICS export',()=>{const s=toICS([{id:'1',title:'A, B',start:'2026-01-01',due:'2026-01-02'}],new Date('2026-01-01T00:00:00Z'));
+ assert.match(s,/DTEND;VALUE=DATE:20260103/);assert.match(s,/SUMMARY:A\\, B/)});
+test('validate rejects bad data and fills defaults',()=>{assert.throws(()=>validate({cols:[],cards:[{id:'1',title:'t',col:'zz'}]}));
+ assert.deepEqual(validate({cols:[{id:'a',name:'A'}],cards:[{id:'1',title:'t',col:'a'}]}).cards[0].deps,[])});
+test('storage round-trip',()=>{const m={};const st={getItem:k=>m[k]??null,setItem:(k,v)=>m[k]=v};persist({cols:[{id:'a',name:'A',wip:0}],cards:[]},st);assert.equal(load(st).cols[0].id,'a')});
+test('markdown escapes html',()=>assert.ok(!md('<script>').includes('<script>')));
