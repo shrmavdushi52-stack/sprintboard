@@ -16,3 +16,9 @@ test('validate rejects bad data and fills defaults',()=>{assert.throws(()=>valid
  assert.deepEqual(validate({cols:[{id:'a',name:'A'}],cards:[{id:'1',title:'t',col:'a'}]}).cards[0].deps,[])});
 test('storage round-trip',()=>{const m={};const st={getItem:k=>m[k]??null,setItem:(k,v)=>m[k]=v};persist({cols:[{id:'a',name:'A',wip:0}],cards:[]},st);assert.equal(load(st).cols[0].id,'a')});
 test('markdown escapes html',()=>assert.ok(!md('<script>').includes('<script>')));
+test('validate guards non-array fields from imported JSON',()=>{
+ const v=validate({cols:[{id:'a',name:'A'}],cards:[{id:'1',title:'t',col:'a',labels:'bug',checklist:'x',comments:5,deps:'z',files:null,activity:{}}]}).cards[0];
+ for(const k of ['labels','checklist','comments','deps','files','activity'])assert.ok(Array.isArray(v[k]),k);
+ assert.equal(v.labels.includes('bug'),false)});
+test('validate cleans malformed array items',()=>{const v=validate({cols:[{id:'a',name:'A'}],cards:[{id:'1',title:'t',col:'a',labels:['bug',3],checklist:[{t:'ok',done:1},null,{x:1}]}]}).cards[0];
+ assert.deepEqual(v.labels,['bug']);assert.deepEqual(v.checklist,[{t:'ok',done:true}])});

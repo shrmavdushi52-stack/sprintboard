@@ -13,7 +13,7 @@ function seed(){const c=[mk('Design tokens','done','Dara',-6,-3,['design']),mk('
 let S=load()??seed();
 const save=()=>persist(S),snap=()=>JSON.stringify(S),H=createHistory(100);
 const readF=()=>parseFilters(location.search),vis=c=>matches(F,c);
-let openId=null,loading=true,calM=TODAY.slice(0,7);
+let dragged=false,openId=null,loading=true,calM=TODAY.slice(0,7);
 function commit(fn,card,msg){H.push(snap());fn();if(card&&msg)card.activity.push({t:Date.now(),m:msg});save();render()}
 const dl=(n,t,m)=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([t],{type:m}));a.download=n;a.click();URL.revokeObjectURL(a.href)};
 const toast=m=>{const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(toast.h);toast.h=setTimeout(()=>t.classList.remove('show'),1800)};
@@ -61,7 +61,7 @@ function list(cs){const k=F.sort||'due',dir=k[0]==='-'?-1:1,key=k.replace('-',''
  const rows=[...cs].sort((a,b)=>String(g(a)).localeCompare(String(g(b)))*dir);if(!rows.length)return empty('No cards match.');
  return`<table><tr>${['title','col','assignee','start','due'].map(h=>`<th data-a=sort data-v=${h===key&&dir===1?'-'+h:h}>${h}${h===key?dir>0?' ▲':' ▼':''}</th>`).join('')}</tr>${rows.map(c=>`<tr data-id=${c.id} data-a=open><td>${esc(c.title)} ${lbls(c)}</td><td>${esc(colOf(c.col)?.name)}</td><td>${esc(c.assignee)}</td><td>${c.start||''}</td><td>${c.due||''}</td></tr>`).join('')}</table>`}
 // ---------- drawer
-function drawer(){const c=byId(openId),d=$('#drawer');if(!c){openId=null;d.classList.remove('open');return}
+function drawer(){const c=byId(openId),d=$('#drawer'),st=d.scrollTop;if(!c){openId=null;d.classList.remove('open');return}
  const o=(arr,v)=>arr.map(x=>`<option value="${x[0]??x}" ${(x[0]??x)===v?'selected':''}>${x[1]??x}</option>`).join('');
  d.innerHTML=`<button data-a=close style=float:right>Close (Esc)</button><h2>Card</h2><label>Title</label><input type=text data-e=title value="${esc(c.title)}">
  <label>Column</label><select data-e=col>${o(S.cols.map(x=>[x.id,x.name]),c.col)}</select><label>Assignee</label><select data-e=assignee><option value="">Unassigned</option>${o(PEOPLE,c.assignee)}</select>
@@ -73,9 +73,9 @@ function drawer(){const c=byId(openId),d=$('#drawer');if(!c){openId=null;d.class
  <label>Attachments (mock)</label>${c.files.map(f=>`<div>📎 ${esc(f)}</div>`).join('')}<button data-a=attach>Attach file</button>
  <label>Comments</label>${c.comments.map(x=>`<div class=cm>${esc(x.m)}<div class=ac>${new Date(x.t).toLocaleString()}</div></div>`).join('')}<input type=text data-add=comment placeholder="Write a comment, press Enter">
  <label>Activity</label>${[...c.activity].reverse().map(x=>`<div class=ac>${new Date(x.t).toLocaleString()} · ${esc(x.m)}</div>`).join('')}<p><button data-a=del style="color:var(--bad)">Delete card</button></p>`;
- d.classList.add('open')}
+ d.classList.add('open');d.scrollTop=st}
 // ---------- events
-document.addEventListener('click',e=>{const el=e.target.closest('[data-a]');if(!el)return;const a=el.dataset.a,id=el.dataset.id;
+document.addEventListener('click',e=>{const el=e.target.closest('[data-a]');if(!el)return;const a=el.dataset.a,id=el.dataset.id;if(dragged&&a==='open')return;
  const A={view:()=>setF({view:el.dataset.v}),undo,redo,theme:()=>{const t=document.documentElement.dataset.theme==='dark'?'light':'dark';document.documentElement.dataset.theme=t;localStorage.theme=t},
  open:()=>{openId=id;render()},close:()=>{openId=null;$('#drawer').classList.remove('open')},zoom:()=>{zoom=el.dataset.v;render()},
  sort:()=>setF({sort:el.dataset.v}),clear:()=>setF({assignee:'',label:'',from:'',to:'',q:''}),calprev:()=>{calM=iso(dn(calM+'-01')-1).slice(0,7);render()},calnext:()=>{calM=iso(dn(calM+'-01')+32).slice(0,7);render()},
@@ -92,16 +92,19 @@ document.addEventListener('click',e=>{const el=e.target.closest('[data-a]');if(!
  if(a==='open'&&e.target.closest('button,input'))return;A[a]?.()});
 document.addEventListener('change',e=>{const t=e.target,c=byId(openId);
  if(t.dataset.f)return setF({[t.dataset.f]:t.value});if(!c)return;
- if(t.dataset.e){const k=t.dataset.e;if(k==='deps'){const v=[...t.selectedOptions].map(o=>o.value);if(v.some(d=>wouldCycle(S.cards,c.id,d)))return toast('That dependency would create a cycle'),render();}
+ if(t.dataset.e){const k=t.dataset.e;
+  if(k==='col'){const prev=c.col;move(c.id,t.value);if(c.col===prev)render();return}if(k==='deps'){const v=[...t.selectedOptions].map(o=>o.value);if(v.some(d=>wouldCycle(S.cards,c.id,d)))return toast('That dependency would create a cycle'),render();}
   commit(()=>{c[k]=k==='deps'?[...t.selectedOptions].map(o=>o.value):t.value;if(k==='start'||k==='due'){if(c.start&&c.due&&c.due<c.start)c.due=c.start;const n=cascade(S.cards,c.id).length;if(n)toast(`Shifted ${n} dependent card${n>1?'s':''}`)}},c,`Edited ${k}`)}
  if(t.dataset.lb)commit(()=>c.labels=t.checked?[...c.labels,t.dataset.lb]:c.labels.filter(l=>l!==t.dataset.lb),c,`Label ${t.dataset.lb}`);
  if(t.dataset.ck)commit(()=>c.checklist[t.dataset.ck].done=t.checked,c,`Checklist: ${c.checklist[t.dataset.ck].t}`)});
-document.addEventListener('input',e=>{if(e.target.id==='q'){const p=e.target.selectionStart;setF({q:e.target.value});const q=$('#q');q.focus();q.setSelectionRange(p,p)}});
+document.addEventListener('input',e=>{if(e.target.dataset.e==='desc'){$('#drawer .md').innerHTML=md(e.target.value)||'<span style="color:var(--mute)">Preview appears here</span>'}
+ if(e.target.id==='q'){const p=e.target.selectionStart;setF({q:e.target.value});const q=$('#q');q.focus();q.setSelectionRange(p,p)}});
 document.addEventListener('keydown',e=>{const t=e.target,c=byId(openId);
- if(e.key==='Enter'&&t.dataset.add&&t.value.trim()){const v=t.value.trim();commit(()=>t.dataset.add==='check'?c.checklist.push({t:v,done:false}):c.comments.push({t:Date.now(),m:v}),c,t.dataset.add==='check'?'Added checklist item':'Commented');return}
+ if(e.key==='Enter'&&t.dataset.add&&t.value.trim()){const v=t.value.trim(),k2=t.dataset.add;commit(()=>t.dataset.add==='check'?c.checklist.push({t:v,done:false}):c.comments.push({t:Date.now(),m:v}),c,t.dataset.add==='check'?'Added checklist item':'Commented');$('#drawer [data-add='+k2+']')?.focus();return}
  if(e.altKey&&t.dataset.id&&t.classList.contains('card')&&/Arrow(Left|Right)/.test(e.key)){const c=byId(t.dataset.id),i=S.cols.findIndex(x=>x.id===c.col)+(e.key==='ArrowRight'?1:-1);if(S.cols[i]){e.preventDefault();move(c.id,S.cols[i].id);setTimeout(()=>$(`.card[data-id=${c.id}]`)?.focus())}return}
  if(/INPUT|TEXTAREA|SELECT/.test(t.tagName)){if(e.key==='Escape')t.blur();return}
  const k=e.key.toLowerCase();if((e.ctrlKey||e.metaKey)&&k==='z'){e.preventDefault();e.shiftKey?redo():undo()}else if((e.ctrlKey||e.metaKey)&&k==='y')redo();
+ else if(e.metaKey||e.ctrlKey||e.altKey)return;
  else if(k==='escape')document.querySelector('[data-a=close]')?.click();else if(k==='n')$('[data-a=newcard]').click();else if(k==='t')$('[data-a=theme]').click();else if(k==='?')$('[data-a=help]').click();
  else if(k==='/'){e.preventDefault();$('#q').focus()}else if('1234'.includes(k)&&k)setF({view:['board','timeline','calendar','list'][k-1]});
  else if(k==='enter'&&t.dataset.a==='open')t.click()});
@@ -112,11 +115,11 @@ function bindDnD(){let dragId=null;
   col.ondrop=e=>{e.preventDefault();col.classList.remove('over');const others=$$('.card',col).filter(x=>x.dataset.id!==dragId);
    const before=others.find(x=>{const r=x.getBoundingClientRect();return e.clientY<r.top+r.height/2});move(dragId,col.dataset.col,before?.dataset.id)}});
  $$('[data-day]').forEach(cell=>{cell.ondragover=e=>e.preventDefault();cell.ondrop=e=>{e.preventDefault();const c=byId(dragId);if(!c)return;const sh=dn(cell.dataset.day)-dn(c.due);
-  commit(()=>{c.due=cell.dataset.day;if(c.start)c.start=iso(dn(c.start)+sh)},c,`Rescheduled to ${cell.dataset.day}`)}});
- $$('.bar').forEach(b=>b.onpointerdown=e=>{e.preventDefault();const c=byId(b.dataset.id),mode=e.target.className||'m',x0=e.clientX,s0=dn(c.start),d0=dn(c.due),pd=ZOOM[zoom],before=snap();let moved=false;
+  commit(()=>{c.due=cell.dataset.day;if(c.start)c.start=iso(dn(c.start)+sh);const n=cascade(S.cards,c.id).length;if(n)toast(`Shifted ${n} dependent card${n>1?'s':''}`)},c,`Rescheduled to ${cell.dataset.day}`)}});
+ $$('.bar').forEach(b=>b.onpointerdown=e=>{e.preventDefault();const c=byId(b.dataset.id),mode=e.target.classList.contains('r')?'r':e.target.classList.contains('l')?'l':'m',x0=e.clientX,s0=dn(c.start),d0=dn(c.due),pd=ZOOM[zoom],before=snap();let moved=false;
   const mv=ev=>{const dd=Math.round((ev.clientX-x0)/pd);if(!dd&&!moved)return;moved=true;
    if(mode==='m'){c.start=iso(s0+dd);c.due=iso(d0+dd)}else if(mode==='r')c.due=iso(Math.max(s0,d0+dd));else c.start=iso(Math.min(d0,s0+dd));render()};
-  const up=()=>{removeEventListener('pointermove',mv);removeEventListener('pointerup',up);if(moved){H.push(before);cascade(S.cards,c.id);c.activity.push({t:Date.now(),m:`Rescheduled ${c.start} → ${c.due}`});save();render();b.dataset.a=''}};
+  const up=()=>{removeEventListener('pointermove',mv);removeEventListener('pointerup',up);if(moved){H.push(before);cascade(S.cards,c.id);c.activity.push({t:Date.now(),m:`Rescheduled ${c.start} → ${c.due}`});save();dragged=true;setTimeout(()=>dragged=false,80);render()}};
   addEventListener('pointermove',mv);addEventListener('pointerup',up);if(!moved)setTimeout(()=>{},0)});}
 document.documentElement.dataset.theme=localStorage.theme||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');
 render();setTimeout(()=>{loading=false;render()},700);
