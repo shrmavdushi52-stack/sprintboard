@@ -23,6 +23,6 @@ JSON export/import with validation, .ics calendar export, Alt+←/→ to move a 
 Shortcuts: N new, / search, 1-4 views, T theme, Ctrl+Z / Ctrl+Shift+Z, Esc, ?.
 
 ## Demo & Links
-- Live demo (Vercel): _add your Vercel URL here after deploying_
-- Demo video (Loom): _add your Loom recording link here_
+- Live demo (Vercel): https://sprintboard-6w3y.vercel.app/
+- Demo video (Loom): https://www.loom.com/share/42ac2113d7c241609fe443d957dcef7c
 - Source: https://github.com/shrmavdushi52-stack/sprintboard
